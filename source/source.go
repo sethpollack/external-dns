@@ -27,9 +27,20 @@ const (
 	hostnameAnnotationKey = "external-dns.alpha.kubernetes.io/hostname"
 	// The value of the controller annotation so that we feel resposible
 	controllerAnnotationValue = "dns-controller"
+
+	RoleTypeExternal = "external"
+	RoleTypeInternal = "internal"
 )
 
 // Source defines the interface Endpoint sources should implement.
 type Source interface {
 	Endpoints() ([]*endpoint.Endpoint, error)
+}
+
+func aliasForNodesInRole(role string, roleType string) string {
+	return "node/role=" + role + "/" + roleType
+}
+
+func aliasForNodeName(nodeName string, roleType string) string {
+	return "node/" + nodeName + "/" + roleType
 }

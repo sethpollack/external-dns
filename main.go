@@ -90,6 +90,10 @@ func main() {
 			src, err = source.NewServiceSource(client, cfg.Namespace, cfg.FqdnTemplate, cfg.Compatibility)
 		case "ingress":
 			src, err = source.NewIngressSource(client, cfg.Namespace, cfg.FqdnTemplate)
+		case "node":
+			src, err = source.NewNodeSource(client, cfg.FqdnTemplate)
+		case "pod":
+			src, err = source.NewPodSource(client, cfg.Namespace, cfg.FqdnTemplate, cfg.Compatibility)
 		default:
 			log.Fatalf("Don't know how to handle sourceType '%s'", sourceType)
 		}

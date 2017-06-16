@@ -32,14 +32,14 @@ type Registry interface {
 }
 
 //TODO(ideahitme): consider moving this to Plan
-func filterOwnedRecords(ownerID string, eps []*endpoint.Endpoint) []*endpoint.Endpoint {
-	filtered := []*endpoint.Endpoint{}
-	for _, ep := range eps {
-		if endpointOwner, ok := ep.Labels[endpoint.OwnerLabelKey]; !ok || endpointOwner != ownerID {
-			log.Debugf(`Skipping endpoint %v because owner id does not match, found: "%s", required: "%s"`, ep, endpointOwner, ownerID)
+func filterOwnedRecords(ownerID string, endpointSets []*endpoint.EndpointSet) []*endpoint.EndpointSet {
+	filtered := []*endpoint.EndpointSet{}
+	for _, endpointSet := range endpointSets {
+		if endpointOwner, ok := endpointSet.Labels[endpoint.OwnerLabelKey]; !ok || endpointOwner != ownerID {
+			log.Debugf(`Skipping EndpointSet %v because owner id does not match, found: "%s", required: "%s"`, endpointSet, endpointOwner, ownerID)
 			continue
 		}
-		filtered = append(filtered, ep)
+		filtered = append(filtered, endpointSet)
 	}
 	return filtered
 }

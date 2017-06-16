@@ -18,12 +18,20 @@ package endpoint
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
 const (
 	// OwnerLabelKey is the name of the label that defines the owner of an Endpoint.
 	OwnerLabelKey = "owner"
+
+	RecordTypeInternalALIAS = "_ALIAS"
+
+	RecordTypeALIAS = "ALIAS"
+	RecordTypeA     = "A"
+	RecordTypeCNAME = "CNAME"
+	RecordTypeTXT   = "TXT"
 )
 
 // Endpoint is a high-level way of a connection between a service and an IP
@@ -34,17 +42,37 @@ type Endpoint struct {
 	Target string
 	// RecordType type of record, e.g. CNAME, A, TXT etc
 	RecordType string
+
+	AliasTarget bool
 	// Labels stores labels defined for the Endpoint
 	Labels map[string]string
 }
 
+type EndpointSet struct {
+	DNSName    string
+	Targets    []string
+	RecordType string
+	Labels     map[string]string
+}
+
 // NewEndpoint initialization method to be used to create an endpoint
-func NewEndpoint(dnsName, target, recordType string) *Endpoint {
+func NewEndpoint(dnsName, target string, recordType string) *Endpoint {
 	return &Endpoint{
-		DNSName:    strings.TrimSuffix(dnsName, "."),
-		Target:     strings.TrimSuffix(target, "."),
-		RecordType: recordType,
-		Labels:     map[string]string{},
+		DNSName:     strings.TrimSuffix(dnsName, "."),
+		Target:      strings.TrimSuffix(target, "."),
+		RecordType:  recordType,
+		AliasTarget: false,
+		Labels:      make(map[string]string),
+	}
+}
+
+func NewAliasTargetEndpoint(dnsName, target string, recordType string) *Endpoint {
+	return &Endpoint{
+		DNSName:     strings.TrimSuffix(dnsName, "."),
+		Target:      strings.TrimSuffix(target, "."),
+		RecordType:  recordType,
+		AliasTarget: true,
+		Labels:      make(map[string]string),
 	}
 }
 
@@ -59,4 +87,20 @@ func (e *Endpoint) MergeLabels(labels map[string]string) {
 
 func (e *Endpoint) String() string {
 	return fmt.Sprintf(`%s -> %s (type "%s")`, e.DNSName, e.Target, e.RecordType)
+}
+
+func TargetSliceEquals(l, r []string) bool {
+	if len(l) != len(r) {
+		return false
+	}
+
+	sort.Strings(l)
+	sort.Strings(r)
+
+	for i := range l {
+		if l[i] != r[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -119,7 +119,9 @@ func (im *InMemoryProvider) Records() ([]*endpoint.Endpoint, error) {
 		}
 
 		for _, record := range records {
-			endpoints = append(endpoints, endpoint.NewEndpoint(record.Name, record.Target, record.Type))
+			for _, target := range record.Targets {
+				endpoints = append(endpoints, endpoint.NewEndpoint(record.Name, target, record.Type))
+			}
 		}
 	}
 
@@ -174,13 +176,13 @@ func (im *InMemoryProvider) ApplyChanges(changes *plan.Changes) error {
 	return nil
 }
 
-func convertToInMemoryRecord(endpoints []*endpoint.Endpoint) []*inMemoryRecord {
+func convertToInMemoryRecord(endpointSets []*endpoint.EndpointSet) []*inMemoryRecord {
 	records := []*inMemoryRecord{}
-	for _, ep := range endpoints {
+	for _, eps := range endpointSets {
 		records = append(records, &inMemoryRecord{
-			Type:   suitableType(ep),
-			Name:   ep.DNSName,
-			Target: ep.Target,
+			Type:    eps.RecordType,
+			Name:    eps.DNSName,
+			Targets: eps.Targets,
 		})
 	}
 	return records
@@ -203,10 +205,10 @@ func (f *filter) Zones(zones map[string]string) map[string]string {
 
 // EndpointZoneID determines zoneID for endpoint from map[zoneID]zoneName by taking longest suffix zoneName match in endpoint DNSName
 // returns empty string if no match found
-func (f *filter) EndpointZoneID(endpoint *endpoint.Endpoint, zones map[string]string) (zoneID string) {
+func (f *filter) EndpointZoneID(endpointSet *endpoint.EndpointSet, zones map[string]string) (zoneID string) {
 	var matchZoneID, matchZoneName string
 	for zoneID, zoneName := range zones {
-		if strings.HasSuffix(endpoint.DNSName, zoneName) && len(zoneName) > len(matchZoneName) {
+		if strings.HasSuffix(endpointSet.DNSName, zoneName) && len(zoneName) > len(matchZoneName) {
 			matchZoneName = zoneName
 			matchZoneID = zoneID
 		}
@@ -219,9 +221,9 @@ func (f *filter) EndpointZoneID(endpoint *endpoint.Endpoint, zones map[string]st
 // Name - DNS name assigned to the record
 // Target - target of the record
 type inMemoryRecord struct {
-	Type   string
-	Name   string
-	Target string
+	Type    string
+	Name    string
+	Targets []string
 }
 
 type zone map[string][]*inMemoryRecord
@@ -283,7 +285,7 @@ func (c *inMemoryClient) ApplyChanges(zoneID string, changes *inMemoryChange) er
 	for _, updateEndpoint := range changes.UpdateNew {
 		for _, rec := range c.zones[zoneID][updateEndpoint.Name] {
 			if rec.Type == updateEndpoint.Type {
-				rec.Target = updateEndpoint.Target
+				rec.Targets = updateEndpoint.Targets
 				break
 			}
 		}
@@ -336,12 +338,12 @@ func (c *inMemoryClient) validateChangeBatch(zone string, changes *inMemoryChang
 		}
 	}
 	for _, updateOldEndpoint := range changes.UpdateOld {
-		if rec := c.findByType(updateOldEndpoint.Type, curZone[updateOldEndpoint.Name]); rec == nil || rec.Target != updateOldEndpoint.Target {
+		if rec := c.findByType(updateOldEndpoint.Type, curZone[updateOldEndpoint.Name]); rec == nil || !endpoint.TargetSliceEquals(rec.Targets, updateOldEndpoint.Targets) {
 			return ErrRecordNotFound
 		}
 	}
 	for _, deleteEndpoint := range changes.Delete {
-		if rec := c.findByType(deleteEndpoint.Type, curZone[deleteEndpoint.Name]); rec == nil || rec.Target != deleteEndpoint.Target {
+		if rec := c.findByType(deleteEndpoint.Type, curZone[deleteEndpoint.Name]); rec == nil || !endpoint.TargetSliceEquals(rec.Targets, deleteEndpoint.Targets) {
 			return ErrRecordNotFound
 		}
 		if err := c.updateMesh(mesh, deleteEndpoint); err != nil {

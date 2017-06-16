@@ -53,11 +53,7 @@ func (c *Controller) RunOnce() error {
 		return err
 	}
 
-	plan := &plan.Plan{
-		Policies: []plan.Policy{c.Policy},
-		Current:  records,
-		Desired:  endpoints,
-	}
+	plan := plan.NewPlan(records, endpoints, c.Policy)
 
 	plan = plan.Calculate()
 

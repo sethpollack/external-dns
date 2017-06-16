@@ -22,10 +22,11 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/linki/instrumented_http"
 
+	dns "google.golang.org/api/dns/v1"
+
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2/google"
 
-	"google.golang.org/api/dns/v1"
 	googleapi "google.golang.org/api/googleapi"
 
 	"github.com/kubernetes-incubator/external-dns/endpoint"
@@ -194,16 +195,16 @@ func (p *GoogleProvider) Records() (endpoints []*endpoint.Endpoint, _ error) {
 }
 
 // CreateRecords creates a given set of DNS records in the given hosted zone.
-func (p *GoogleProvider) CreateRecords(endpoints []*endpoint.Endpoint) error {
+func (p *GoogleProvider) CreateRecords(endpointSets []*endpoint.EndpointSet) error {
 	change := &dns.Change{}
 
-	change.Additions = append(change.Additions, newRecords(endpoints)...)
+	change.Additions = append(change.Additions, newRecords(endpointSets)...)
 
 	return p.submitChange(change)
 }
 
 // UpdateRecords updates a given set of old records to a new set of records in a given hosted zone.
-func (p *GoogleProvider) UpdateRecords(records, oldRecords []*endpoint.Endpoint) error {
+func (p *GoogleProvider) UpdateRecords(records, oldRecords []*endpoint.EndpointSet) error {
 	change := &dns.Change{}
 
 	change.Additions = append(change.Additions, newRecords(records)...)
@@ -213,10 +214,11 @@ func (p *GoogleProvider) UpdateRecords(records, oldRecords []*endpoint.Endpoint)
 }
 
 // DeleteRecords deletes a given set of DNS records in a given zone.
-func (p *GoogleProvider) DeleteRecords(endpoints []*endpoint.Endpoint) error {
+func (p *GoogleProvider) DeleteRecords(endpointSets []*endpoint.EndpointSet) error {
+
 	change := &dns.Change{}
 
-	change.Deletions = append(change.Deletions, newRecords(endpoints)...)
+	change.Deletions = append(change.Deletions, newRecords(endpointSets)...)
 
 	return p.submitChange(change)
 }
@@ -319,30 +321,34 @@ func suitableManagedZone(hostname string, zones map[string]*dns.ManagedZone) *dn
 }
 
 // newRecords returns a collection of RecordSets based on the given endpoints.
-func newRecords(endpoints []*endpoint.Endpoint) []*dns.ResourceRecordSet {
-	records := make([]*dns.ResourceRecordSet, len(endpoints))
+func newRecords(endpointSets []*endpoint.EndpointSet) []*dns.ResourceRecordSet {
+	records := make([]*dns.ResourceRecordSet, len(endpointSets))
 
-	for i, endpoint := range endpoints {
-		records[i] = newRecord(endpoint)
+	for i, endpointSet := range endpointSets {
+		records[i] = newRecord(endpointSet)
 	}
 
 	return records
 }
 
 // newRecord returns a RecordSet based on the given endpoint.
-func newRecord(endpoint *endpoint.Endpoint) *dns.ResourceRecordSet {
+func newRecord(endpointSet *endpoint.EndpointSet) *dns.ResourceRecordSet {
 	// TODO(linki): works around appending a trailing dot to TXT records. I think
 	// we should go back to storing DNS names with a trailing dot internally. This
 	// way we can use it has is here and trim it off if it exists when necessary.
-	target := endpoint.Target
-	if suitableType(endpoint) == "CNAME" {
-		target = ensureTrailingDot(target)
+	resourceRecordSet := &dns.ResourceRecordSet{
+		Name: ensureTrailingDot(endpointSet.DNSName),
+		Ttl:  300,
+		Type: endpointSet.RecordType,
 	}
 
-	return &dns.ResourceRecordSet{
-		Name:    ensureTrailingDot(endpoint.DNSName),
-		Rrdatas: []string{target},
-		Ttl:     300,
-		Type:    suitableType(endpoint),
+	for _, target := range endpointSet.Targets {
+		if endpointSet.RecordType == "CNAME" {
+			target = ensureTrailingDot(target)
+		}
+
+		resourceRecordSet.Rrdatas = append(resourceRecordSet.Rrdatas, target)
 	}
+
+	return resourceRecordSet
 }

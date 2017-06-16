@@ -27,6 +27,12 @@ type dedupSource struct {
 	source Source
 }
 
+type dedupKey struct {
+	DNSName    string
+	Target     string
+	RecordType string
+}
+
 // NewDedupSource creates a new dedupSource wrapping the provided Source.
 func NewDedupSource(source Source) Source {
 	return &dedupSource{source: source}
@@ -35,7 +41,7 @@ func NewDedupSource(source Source) Source {
 // Endpoints collects endpoints from its wrapped source and returns them without duplicates.
 func (ms *dedupSource) Endpoints() ([]*endpoint.Endpoint, error) {
 	result := []*endpoint.Endpoint{}
-	collected := map[string]bool{}
+	collected := map[dedupKey]bool{}
 
 	endpoints, err := ms.source.Endpoints()
 	if err != nil {
@@ -43,7 +49,11 @@ func (ms *dedupSource) Endpoints() ([]*endpoint.Endpoint, error) {
 	}
 
 	for _, ep := range endpoints {
-		identifier := ep.DNSName + " / " + ep.Target
+		identifier := dedupKey{
+			DNSName:    ep.DNSName,
+			Target:     ep.Target,
+			RecordType: ep.RecordType,
+		}
 
 		if _, ok := collected[identifier]; ok {
 			log.Debugf("Removing duplicate endpoint %s", ep)
